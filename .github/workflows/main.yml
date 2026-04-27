@@ -1,10 +1,260 @@
-name: Manual Only Workflow
+name: QApilot CLI Test
 
 on:
   workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'QApilot project UUID (e.g. 41559a62-723c-42f5-bb9a-0b7e1f8855c0)'
+        required: true
+      run_name:
+        description: 'Test run name'
+        required: false
+        default: 'GitHub Actions CLI Test'
+      milestone_id:
+        description: 'Milestone UUID (optional)'
+        required: false
+        default: ''
 
 jobs:
-  test:
+  # ─── Job 1: verify CLI auth + list projects ────────────────────────────────
+  verify:
+    name: Verify CLI auth
     runs-on: ubuntu-latest
+    outputs:
+      run_name: ${{ steps.meta.outputs.run_name }}
     steps:
-      - run: echo "Workflow started manually"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install QApilot CLI
+        run: npm install --prefix cli && npm link --prefix cli
+
+      - name: Store credentials
+        run: |
+          qapilot auth:set \
+            --url "${{ secrets.QAPILOT_URL }}" \
+            --api-key "${{ secrets.QAPILOT_API_KEY }}"
+
+      - name: List projects (smoke test)
+        run: qapilot project:list
+
+      - name: List existing cases
+        run: |
+          qapilot case:list \
+            --project-id "${{ inputs.project_id }}" \
+            --limit 10
+
+      - name: Set run metadata
+        id: meta
+        run: |
+          echo "run_name=${{ inputs.run_name }} #${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+  # ─── Job 2: simulate a test suite + submit results ─────────────────────────
+  submit-results:
+    name: Submit test results
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install QApilot CLI
+        run: npm install --prefix cli && npm link --prefix cli
+
+      - name: Store credentials
+        run: |
+          qapilot auth:set \
+            --url "${{ secrets.QAPILOT_URL }}" \
+            --api-key "${{ secrets.QAPILOT_API_KEY }}"
+
+      - name: Generate sample JUnit XML results
+        run: |
+          mkdir -p reports
+
+          # Unit test results
+          cat > reports/unit-tests.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites>
+            <testsuite name="Auth Module" tests="4" failures="0" errors="0" time="1.234">
+              <testcase name="should register a new user" classname="Auth" time="0.312" />
+              <testcase name="should login with valid credentials" classname="Auth" time="0.289" />
+              <testcase name="should reject invalid password" classname="Auth" time="0.198" />
+              <testcase name="should return 401 for missing token" classname="Auth" time="0.435" />
+            </testsuite>
+            <testsuite name="Project Module" tests="3" failures="1" errors="0" time="0.987">
+              <testcase name="should create a project" classname="Project" time="0.341" />
+              <testcase name="should list all projects" classname="Project" time="0.298" />
+              <testcase name="should delete a project" classname="Project" time="0.348">
+                <failure message="Expected 204 but got 500">AssertionError: expected 204 to equal 500</failure>
+              </testcase>
+            </testsuite>
+            <testsuite name="Run Module" tests="3" failures="0" errors="0" time="1.102">
+              <testcase name="should create a test run" classname="Run" time="0.412" />
+              <testcase name="should list runs in a project" classname="Run" time="0.389" />
+              <testcase name="should mark run as completed" classname="Run" time="0.301" />
+            </testsuite>
+          </testsuites>
+          EOF
+
+          # E2E test results
+          cat > reports/e2e-tests.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites>
+            <testsuite name="Login Flow" tests="3" failures="0" skipped="1" time="8.541">
+              <testcase name="user can log in with valid credentials" classname="E2E.Login" time="2.312" />
+              <testcase name="user sees error on wrong password" classname="E2E.Login" time="1.987" />
+              <testcase name="user is redirected after login" classname="E2E.Login" time="4.242" />
+            </testsuite>
+            <testsuite name="Test Case Management" tests="4" failures="0" skipped="1" time="12.334">
+              <testcase name="user can create a test case" classname="E2E.Cases" time="3.112" />
+              <testcase name="user can edit a test case" classname="E2E.Cases" time="2.887" />
+              <testcase name="user can delete a test case" classname="E2E.Cases" time="2.991" />
+              <testcase name="user can import cases from CSV" classname="E2E.Cases" time="3.344">
+                <skipped />
+              </testcase>
+            </testsuite>
+            <testsuite name="Run Execution" tests="2" failures="1" time="9.112">
+              <testcase name="user can submit test results" classname="E2E.Runs" time="4.231" />
+              <testcase name="run summary shows correct counts" classname="E2E.Runs" time="4.881">
+                <failure message="Expected pass count to be 5, got 4">CountMismatch: 5 !== 4</failure>
+              </testcase>
+            </testsuite>
+          </testsuites>
+          EOF
+
+          echo "✓ Generated reports/unit-tests.xml and reports/e2e-tests.xml"
+          echo ""
+          echo "Unit tests:"
+          grep '<testcase' reports/unit-tests.xml | wc -l | xargs echo "  cases:"
+          echo "E2E tests:"
+          grep '<testcase' reports/e2e-tests.xml | wc -l | xargs echo "  cases:"
+
+      - name: Submit results to QApilot
+        run: |
+          MILESTONE_ARG=""
+          if [ -n "${{ inputs.milestone_id }}" ]; then
+            MILESTONE_ARG="--milestone-id ${{ inputs.milestone_id }}"
+          fi
+
+          qapilot run:submit \
+            --project-id "${{ inputs.project_id }}" \
+            --name "${{ needs.verify.outputs.run_name }}" \
+            --results reports/unit-tests.xml reports/e2e-tests.xml \
+            --config "Ubuntu / Node 20" \
+            --tags "ci,github-actions" \
+            --description "Automated run from GitHub Actions — commit ${{ github.sha }}" \
+            $MILESTONE_ARG \
+            --json | tee result.json
+
+      - name: Print summary
+        if: always()
+        run: |
+          if [ -f result.json ]; then
+            echo "### QApilot Run Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            PASSED=$(jq '.passed // 0' result.json)
+            FAILED=$(jq '.failed // 0' result.json)
+            SKIPPED=$(jq '.skipped // 0' result.json)
+            RUN_ID=$(jq -r '.run_id // "?"' result.json)
+            echo "| Status  | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed  | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed  | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Run ID:** $RUN_ID" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** ${{ secrets.QAPILOT_URL }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ─── Job 3: parallel thread test ───────────────────────────────────────────
+  parallel-thread-test:
+    name: Parallel thread submission test
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install QApilot CLI
+        run: npm install --prefix cli && npm link --prefix cli
+
+      - name: Store credentials
+        run: |
+          qapilot auth:set \
+            --url "${{ secrets.QAPILOT_URL }}" \
+            --api-key "${{ secrets.QAPILOT_API_KEY }}"
+
+      - name: Create a run for thread submission
+        id: create_run
+        run: |
+          RUN_ID=$(qapilot run:create \
+            --project-id "${{ inputs.project_id }}" \
+            --name "Parallel Thread Test #${{ github.run_number }}" \
+            --config "Thread Test" \
+            --tags "ci,parallel" \
+            --json | jq -r '.run_id')
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "Created run: $RUN_ID"
+
+      - name: Generate thread result files
+        run: |
+          mkdir -p reports
+
+          cat > reports/thread-a.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites>
+            <testsuite name="API Tests - Thread A" tests="3" failures="0" time="2.1">
+              <testcase name="GET /api/projects returns 200" classname="API.Thread-A" time="0.7" />
+              <testcase name="POST /api/projects creates project" classname="API.Thread-A" time="0.8" />
+              <testcase name="DELETE /api/projects removes project" classname="API.Thread-A" time="0.6" />
+            </testsuite>
+          </testsuites>
+          EOF
+
+          cat > reports/thread-b.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites>
+            <testsuite name="API Tests - Thread B" tests="3" failures="1" time="2.4">
+              <testcase name="GET /api/runs returns list" classname="API.Thread-B" time="0.9" />
+              <testcase name="POST /api/runs creates run" classname="API.Thread-B" time="0.8" />
+              <testcase name="PATCH /api/runs updates status" classname="API.Thread-B" time="0.7">
+                <failure message="Timeout after 700ms">TimeoutError: response took too long</failure>
+              </testcase>
+            </testsuite>
+          </testsuites>
+          EOF
+
+      - name: Submit thread A results
+        run: |
+          qapilot run:submit-thread \
+            --project-id "${{ inputs.project_id }}" \
+            --run-id "${{ steps.create_run.outputs.run_id }}" \
+            --results reports/thread-a.xml
+
+      - name: Submit thread B results
+        run: |
+          qapilot run:submit-thread \
+            --project-id "${{ inputs.project_id }}" \
+            --run-id "${{ steps.create_run.outputs.run_id }}" \
+            --results reports/thread-b.xml
+
+      - name: Complete the run
+        run: |
+          qapilot run:complete \
+            --project-id "${{ inputs.project_id }}" \
+            --run-id "${{ steps.create_run.outputs.run_id }}"
+
+      - name: List runs to confirm
+        run: |
+          qapilot run:list \
+            --project-id "${{ inputs.project_id }}" \
+            --limit 5
