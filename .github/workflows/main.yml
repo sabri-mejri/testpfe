@@ -30,7 +30,7 @@ jobs:
           node-version: '20'
 
       - name: Install QApilot CLI
-        run: npm install --prefix cli && npm link --prefix cli
+        run: npm install -g qapilot-cli
 
       - name: Store credentials
         run: |
@@ -65,7 +65,7 @@ jobs:
           node-version: '20'
 
       - name: Install QApilot CLI
-        run: npm install --prefix cli && npm link --prefix cli
+        run: npm install -g qapilot-cli
 
       - name: Store credentials
         run: |
@@ -185,7 +185,7 @@ jobs:
           node-version: '20'
 
       - name: Install QApilot CLI
-        run: npm install --prefix cli && npm link --prefix cli
+        run: npm install -g qapilot-cli
 
       - name: Store credentials
         run: |
