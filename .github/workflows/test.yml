@@ -1,4 +1,4 @@
-name: Playwright → QApilot
+name: Playwright result → QApilot
 
 on:
   workflow_dispatch:
