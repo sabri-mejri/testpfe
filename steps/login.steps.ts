@@ -1,61 +1,49 @@
-import { Given, When, Then, Before } from '@cucumber/cucumber'
-import { Browser, chromium, Page } from '@playwright/test'
-import { LoginPage } from '../pages/LoginPage'
-import { DashboardPage } from '../pages/DashboardPage'
+import { createBdd } from 'playwright-bdd'
+import { test } from '../fixtures/base'
 
-let browser: Browser
-let page: Page
-let loginPage: LoginPage
-let dashboardPage: DashboardPage
+const { Given, When, Then } = createBdd(test)
 
-Before(async () => {
-  browser = await chromium.launch()
-  page = await browser.newPage()
-  loginPage = new LoginPage(page)
-  dashboardPage = new DashboardPage(page)
-})
-
-Given('the user is on the login page', async () => {
+Given('the user is on the login page', async ({ loginPage }) => {
   await loginPage.goto()
 })
 
-Given('the user is logged in as {string}', async (email: string) => {
+Given('the user is logged in as {string}', async ({ loginPage }, email: string) => {
   await loginPage.login(email, 'Test@1234')
 })
 
-When('the user enters email {string}', async (email: string) => {
+When('the user enters email {string}', async ({ loginPage }, email: string) => {
   await loginPage.fillEmail(email)
 })
 
-When('the user enters password {string}', async (password: string) => {
+When('the user enters password {string}', async ({ loginPage }, password: string) => {
   await loginPage.fillPassword(password)
 })
 
-When('the user clicks Sign in', async () => {
+When('the user clicks Sign in', async ({ loginPage }) => {
   await loginPage.submit()
 })
 
-When('the user clicks Sign in without filling any fields', async () => {
+When('the user clicks Sign in without filling any fields', async ({ loginPage }) => {
   await loginPage.submit()
 })
 
-When('the user clicks Logout', async () => {
+When('the user clicks Logout', async ({ dashboardPage }) => {
   await dashboardPage.logout()
 })
 
-Then('the user should be redirected to the dashboard', async () => {
+Then('the user should be redirected to the dashboard', async ({ loginPage }) => {
   await loginPage.expectRedirectedToDashboard()
 })
 
-Then('a welcome message should display {string}', async (message: string) => {
+Then('a welcome message should display {string}', async ({ dashboardPage }, message: string) => {
   const name = message.replace('Welcome, ', '')
   await dashboardPage.expectWelcomeMessage(name)
 })
 
-Then('an error message {string} should be displayed', async (message: string) => {
+Then('an error message {string} should be displayed', async ({ loginPage }, message: string) => {
   await loginPage.expectErrorMessage(message)
 })
 
-Then('the user should be redirected to the login page', async () => {
+Then('the user should be redirected to the login page', async ({ loginPage }) => {
   await loginPage.goto()
 })

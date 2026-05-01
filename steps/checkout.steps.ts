@@ -1,33 +1,21 @@
-import { Given, When, Then, Before, DataTable } from '@cucumber/cucumber'
-import { Browser, chromium, Page } from '@playwright/test'
-import { LoginPage } from '../pages/LoginPage'
-import { CheckoutPage } from '../pages/CheckoutPage'
+import { createBdd, DataTable } from 'playwright-bdd'
+import { test } from '../fixtures/base'
 
-let browser: Browser
-let page: Page
-let loginPage: LoginPage
-let checkoutPage: CheckoutPage
+const { Given, When, Then } = createBdd(test)
 
-Before(async () => {
-  browser = await chromium.launch()
-  page = await browser.newPage()
-  loginPage = new LoginPage(page)
-  checkoutPage = new CheckoutPage(page)
+Given('the user is logged in', async ({ authenticatedPage: _ }) => {
+  // fixture setup handles login
 })
 
-Given('the user is logged in', async () => {
-  await loginPage.login('testuser@example.com', 'Test@1234')
-})
-
-Given('the user has items in the cart', async () => {
+Given('the user has items in the cart', async ({ page }) => {
   await page.goto('/cart')
 })
 
-When('the user navigates to checkout', async () => {
+When('the user navigates to checkout', async ({ checkoutPage }) => {
   await checkoutPage.goto()
 })
 
-When('the user fills in the shipping address', async (table: DataTable) => {
+When('the user fills in the shipping address', async ({ checkoutPage }, table: DataTable) => {
   const row = table.hashes()[0]
   await checkoutPage.fillShippingAddress({
     street: row.street,
@@ -37,7 +25,7 @@ When('the user fills in the shipping address', async (table: DataTable) => {
   })
 })
 
-When('the user fills in payment details', async (table: DataTable) => {
+When('the user fills in payment details', async ({ checkoutPage }, table: DataTable) => {
   const row = table.hashes()[0]
   await checkoutPage.fillPaymentDetails({
     number: row.card_number,
@@ -46,26 +34,26 @@ When('the user fills in payment details', async (table: DataTable) => {
   })
 })
 
-When('the user places the order', async () => {
+When('the user places the order', async ({ checkoutPage }) => {
   await checkoutPage.placeOrder()
 })
 
-When('the user clicks Place Order without filling shipping address', async () => {
+When('the user clicks Place Order without filling shipping address', async ({ checkoutPage }) => {
   await checkoutPage.placeOrder()
 })
 
-Then('an order confirmation should be displayed', async () => {
+Then('an order confirmation should be displayed', async ({ checkoutPage }) => {
   await checkoutPage.expectOrderConfirmation('ORD-')
 })
 
-Then('the order total should be {string}', async (amount: string) => {
+Then('the order total should be {string}', async ({ checkoutPage }, amount: string) => {
   await checkoutPage.expectTotalPrice(amount)
 })
 
-Then('a payment error {string} should be displayed', async (message: string) => {
+Then('a payment error {string} should be displayed', async ({ page }, message: string) => {
   await page.getByRole('alert').filter({ hasText: message }).waitFor()
 })
 
-Then('a validation error {string} should be displayed', async (message: string) => {
+Then('a validation error {string} should be displayed', async ({ page }, message: string) => {
   await page.getByText(message).waitFor()
 })

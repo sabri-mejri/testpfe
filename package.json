@@ -2,13 +2,14 @@
   "name": "testpfe",
   "version": "1.0.0",
   "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
+    "test": "bddgen && playwright test",
+    "test:headed": "bddgen && playwright test --headed",
     "report": "playwright show-report"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@cucumber/cucumber": "^10.3.2",
+    "playwright-bdd": "^7.0.0",
     "typescript": "^5.4.5"
   }
 }
