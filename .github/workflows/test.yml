@@ -1,4 +1,4 @@
-name: Playwright result → QApilot
+name: Playwright → QApilot
 
 on:
   workflow_dispatch:
@@ -14,6 +14,9 @@ on:
         description: 'Milestone UUID (optional)'
         required: false
         default: ''
+
+env:
+  QAPILOT_URL: https://qapilot.onrender.com
 
 jobs:
   playwright:
@@ -53,8 +56,8 @@ jobs:
 
       - name: Store QApilot credentials
         run: |
-           qapilot auth:keygen \
-            --url "https://q-apilot-l67cehe4a-mejrisabri02-1017s-projects.vercel.app/" \
+          qapilot auth:keygen \
+            --url "${{ env.QAPILOT_URL }}" \
             --email "admin@quinta.com" \
             --password "admin123" \
             --name "github-actions-${{ github.run_id }}"
@@ -95,5 +98,5 @@ jobs:
             echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Run ID:** $RUN_ID" >> $GITHUB_STEP_SUMMARY
-            echo "**QApilot URL:** ${{ secrets.QAPILOT_URL }}" >> $GITHUB_STEP_SUMMARY
+            echo "**QApilot URL:** ${{ env.QAPILOT_URL }}" >> $GITHUB_STEP_SUMMARY
           fi
