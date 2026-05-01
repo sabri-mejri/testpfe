@@ -1,0 +1,99 @@
+name: Playwright → QApilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'QApilot project UUID'
+        required: true
+      run_name:
+        description: 'Test run name'
+        required: false
+        default: 'Playwright CI Run'
+      milestone_id:
+        description: 'Milestone UUID (optional)'
+        required: false
+        default: ''
+
+jobs:
+  playwright:
+    name: Run Playwright tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: testpfe/package-lock.json
+
+      - name: Install dependencies
+        working-directory: testpfe
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: testpfe
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run Playwright tests
+        working-directory: testpfe
+        run: npx playwright test
+        continue-on-error: true
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: testpfe/playwright-report/
+          retention-days: 7
+
+      - name: Install QApilot CLI
+        run: npm install -g qapilot-cli
+
+      - name: Store QApilot credentials
+        run: |
+          qapilot auth:set \
+            --url "${{ secrets.QAPILOT_URL }}" \
+            --api-key "${{ secrets.QAPILOT_API_KEY }}"
+
+      - name: Submit results to QApilot
+        run: |
+          MILESTONE_ARG=""
+          if [ -n "${{ inputs.milestone_id }}" ]; then
+            MILESTONE_ARG="--milestone-id ${{ inputs.milestone_id }}"
+          fi
+
+          RUN_NAME="${{ inputs.run_name || format('Playwright #{0} @ {1}', github.run_number, github.ref_name) }}"
+
+          qapilot run:submit \
+            --project-id "${{ inputs.project_id || secrets.QAPILOT_PROJECT_ID }}" \
+            --name "$RUN_NAME" \
+            --results testpfe/results/playwright-results.xml \
+            --config "Ubuntu / Node 20 / Chromium + Firefox" \
+            --tags "ci,playwright,github-actions" \
+            --description "Playwright run — commit ${{ github.sha }}" \
+            $MILESTONE_ARG \
+            --json | tee qapilot-result.json
+
+      - name: Write GitHub step summary
+        if: always()
+        run: |
+          if [ -f qapilot-result.json ]; then
+            echo "### QApilot Run Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            PASSED=$(jq '.passed  // 0' qapilot-result.json)
+            FAILED=$(jq '.failed  // 0' qapilot-result.json)
+            SKIPPED=$(jq '.skipped // 0' qapilot-result.json)
+            RUN_ID=$(jq -r '.run_id // "?"' qapilot-result.json)
+            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed  | $PASSED  |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed  | $FAILED  |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Run ID:** $RUN_ID" >> $GITHUB_STEP_SUMMARY
+            echo "**QApilot URL:** ${{ secrets.QAPILOT_URL }}" >> $GITHUB_STEP_SUMMARY
+          fi
