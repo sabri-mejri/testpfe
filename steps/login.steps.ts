@@ -1,7 +1,4 @@
-import { createBdd } from 'playwright-bdd'
-import { test } from '../fixtures/base'
-
-const { Given, When, Then } = createBdd(test)
+import { Given, When, Then } from '../fixtures/base'
 
 Given('the user is on the login page', async ({ loginPage }) => {
   await loginPage.goto()

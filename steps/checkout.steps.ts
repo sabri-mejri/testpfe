@@ -1,7 +1,5 @@
-import { createBdd, DataTable } from 'playwright-bdd'
-import { test } from '../fixtures/base'
-
-const { Given, When, Then } = createBdd(test)
+import { Given, When, Then } from '../fixtures/base'
+import { DataTable } from '@cucumber/cucumber'
 
 Given('the user is logged in', async ({ authenticatedPage: _ }) => {
   // fixture setup handles login

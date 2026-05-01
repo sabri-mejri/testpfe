@@ -1,4 +1,4 @@
-import { test as base } from 'playwright-bdd'
+import { test as base, createBdd } from 'playwright-bdd'
 import { LoginPage } from '../pages/LoginPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { CheckoutPage } from '../pages/CheckoutPage'
@@ -23,7 +23,6 @@ export const test = base.extend<Fixtures>({
     await use(new CheckoutPage(page))
   },
 
-  // Pre-authenticated session — logs in with default test user before the test
   authenticatedPage: async ({ page }, use) => {
     const loginPage = new LoginPage(page)
     await loginPage.login(
@@ -33,5 +32,7 @@ export const test = base.extend<Fixtures>({
     await use({ loginPage, dashboardPage: new DashboardPage(page) })
   },
 })
+
+export const { Given, When, Then } = createBdd(test)
 
 export { expect } from '@playwright/test'
