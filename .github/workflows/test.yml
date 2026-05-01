@@ -26,19 +26,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: testpfe/package-lock.json
 
       - name: Install dependencies
-        working-directory: testpfe
-        run: npm ci
+        run: npm install
 
       - name: Install Playwright browsers
-        working-directory: testpfe
         run: npx playwright install --with-deps chromium firefox
 
       - name: Run Playwright tests
-        working-directory: testpfe
         run: npx playwright test
         continue-on-error: true
 
@@ -47,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: testpfe/playwright-report/
+          path: playwright-report/
           retention-days: 7
 
       - name: Install QApilot CLI
@@ -71,7 +66,7 @@ jobs:
           qapilot run:submit \
             --project-id "${{ inputs.project_id || secrets.QAPILOT_PROJECT_ID }}" \
             --name "$RUN_NAME" \
-            --results testpfe/results/playwright-results.xml \
+            --results results/playwright-results.xml \
             --config "Ubuntu / Node 20 / Chromium + Firefox" \
             --tags "ci,playwright,github-actions" \
             --description "Playwright run — commit ${{ github.sha }}" \
