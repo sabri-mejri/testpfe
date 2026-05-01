@@ -53,9 +53,12 @@ jobs:
 
       - name: Store QApilot credentials
         run: |
-          qapilot auth:set \
-            --url "https://q-apilot-l67cehe4a-mejrisabri02-1017s-projects.vercel.app" \
-            --api-key "qp_12128ddefe8499c6d7e76bcbce0b7179c052ca1acd95463e4289691cad71ca10"
+          mkdir -p ~/.qapilot
+          printf '{"url":"%s","api_key":"%s"}' \
+            "https://q-apilot-l67cehe4a-mejrisabri02-1017s-projects.vercel.app" \
+            "qp_12128ddefe8499c6d7e76bcbce0b7179c052ca1acd95463e4289691cad71ca10" \
+            > ~/.qapilot/credentials.json
+          chmod 600 ~/.qapilot/credentials.json
 
       - name: Submit results to QApilot
         run: |
