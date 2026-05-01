@@ -5,7 +5,11 @@ export default defineConfig({
   fullyParallel: false,
   retries: 1,
   workers: 2,
-  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  reporter: [
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list'],
+    ['junit', { outputFile: 'results/playwright-results.xml' }],
+  ],
   use: {
     baseURL: 'http://localhost:3000',
     headless: true,
